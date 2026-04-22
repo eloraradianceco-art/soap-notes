@@ -251,12 +251,18 @@ textarea.fi{resize:vertical;line-height:1.55;min-height:78px}
     <!-- NEW SESSION PAGE -->
     <div class="page active" id="page-new">
 
+      <!-- Case type toggle -->
+      <div style="display:flex;gap:0;margin-bottom:.75rem;border-radius:var(--rs);overflow:hidden;border:1px solid var(--bdr)">
+        <button class="case-tab active" id="case-fitness" onclick="setCaseType('fitness')" style="flex:1;padding:11px;font-size:14px;font-weight:700;border:none;cursor:pointer;font-family:inherit;background:var(--teal);color:#fff;transition:all .15s">Fitness / Corrective</button>
+        <button class="case-tab" id="case-pediatric" onclick="setCaseType('pediatric')" style="flex:1;padding:11px;font-size:14px;font-weight:700;border:none;cursor:pointer;font-family:inherit;background:var(--surf);color:var(--txt2);transition:all .15s">Pediatric / Oral Myofascial</button>
+      </div>
+
       <!-- Client selector -->
       <div class="card">
-        <div class="card-hd">Client</div>
+        <div class="card-hd" id="client-card-label">Client</div>
         <div class="csel-row" style="margin-bottom:.75rem">
           <div class="field">
-            <label>Select client</label>
+            <label id="client-sel-label">Select client</label>
             <select class="fi" id="ns-client-sel" onchange="onClientSelect()">
               <option value="">— Choose or create —</option>
             </select>
@@ -264,9 +270,37 @@ textarea.fi{resize:vertical;line-height:1.55;min-height:78px}
           <button class="btn-add-client" onclick="showNewClientFields()">+ New</button>
         </div>
         <div id="ns-new-client-fields" style="display:none">
-          <div class="field">
+          <div class="field" id="fitness-name-field">
             <label>Client name</label>
             <input type="text" class="fi" id="ns-new-name" placeholder="First Last" autocorrect="off" />
+          </div>
+          <!-- Pediatric extra fields -->
+          <div id="pediatric-client-fields" style="display:none">
+            <div class="row2" style="margin-bottom:.75rem">
+              <div class="field">
+                <label>Infant name</label>
+                <input type="text" class="fi" id="ns-infant-name" placeholder="First Last" autocorrect="off" />
+              </div>
+              <div class="field">
+                <label>Date of birth</label>
+                <input type="date" class="fi" id="ns-infant-dob" />
+              </div>
+            </div>
+            <div class="row2">
+              <div class="field">
+                <label>Parent / guardian name</label>
+                <input type="text" class="fi" id="ns-parent-name" placeholder="First Last" autocorrect="off" />
+              </div>
+              <div class="field">
+                <label>Feeding method</label>
+                <select class="fi" id="ns-feeding-method">
+                  <option>Breastfeeding</option>
+                  <option>Bottle (pumped)</option>
+                  <option>Formula</option>
+                  <option>Mixed breast/bottle</option>
+                </select>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -323,6 +357,67 @@ textarea.fi{resize:vertical;line-height:1.55;min-height:78px}
             <div class="field" style="margin-top:.75rem">
               <label>Goals</label>
               <input type="text" class="fi" id="ns-h-goals" placeholder="e.g. fat loss, pain-free movement, athletic performance" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PEDIATRIC HISTORY CARD -->
+      <div class="card" id="ns-ped-history-card" style="display:none">
+        <div class="collaps-hd" onclick="togglePedHistory()">
+          <div class="card-hd" style="margin:0">Clinical History</div>
+          <span class="collaps-arrow" id="ped-hist-arrow">▼</span>
+        </div>
+        <div id="ped-intake-controls" style="display:none;padding-top:.75rem;border-top:1px solid var(--bdr);margin-top:.75rem">
+          <button class="intake-rec-btn" id="ped-intake-rec-btn" onclick="togglePedIntakeRecord()">
+            <div class="rec-dot"></div>
+            <span id="ped-intake-rec-label">Record Intake Conversation</span>
+          </button>
+          <div class="intake-hint" id="ped-intake-hint">Tap record during your intake with the parent. Speak naturally — ask about birth, feeding, and symptoms. Hit Stop, then Extract.</div>
+          <div id="ped-intake-wrap" style="display:none">
+            <textarea class="trans-area" id="ped-intake-transcript" style="min-height:80px;margin-bottom:.5rem;font-size:13px" placeholder="Intake transcript appears here..." readonly></textarea>
+            <div style="display:flex;gap:8px">
+              <button class="btn-sec" onclick="clearPedIntake()" style="flex:1;font-size:13px;padding:10px">Clear</button>
+              <button class="btn-pri" id="btn-ped-extract" onclick="extractPedHistory()" style="flex:2;font-size:13px;padding:10px">Extract History Fields</button>
+            </div>
+          </div>
+          <div class="loading-bar" id="ped-extract-loading"><div class="loading-fill"></div></div>
+        </div>
+        <div class="collaps-body" id="ped-hist-body" style="max-height:0">
+          <div style="padding-top:.75rem">
+            <div class="row2" style="margin-bottom:.75rem">
+              <div class="field">
+                <label>Birth history</label>
+                <textarea class="fi" id="ped-h-birth" rows="3" placeholder="Gestational age, vaginal/C-section, forceps/vacuum use, NICU stay, jaundice, interventions at birth..."></textarea>
+              </div>
+              <div class="field">
+                <label>Feeding history</label>
+                <textarea class="fi" id="ped-h-feeding" rows="3" placeholder="Latch description, feeding duration/frequency, weight gain, nipple pain or damage, shield use, reflux, gassiness..."></textarea>
+              </div>
+            </div>
+            <div class="row2" style="margin-bottom:.75rem">
+              <div class="field">
+                <label>Oral visual assessment</label>
+                <textarea class="fi" id="ped-h-oral" rows="3" placeholder="Tongue mobility, elevation, lateralization, lip tie visibility, buccal ties, palate shape (high/narrow/normal), oral symmetry..."></textarea>
+              </div>
+              <div class="field">
+                <label>Palpation findings</label>
+                <textarea class="fi" id="ped-h-palp" rows="3" placeholder="Tissue tension, restriction location (anterior/posterior tongue, floor of mouth, buccal, lips), tissue quality, response to touch..."></textarea>
+              </div>
+            </div>
+            <div class="row2" style="margin-bottom:.75rem">
+              <div class="field">
+                <label>Referral network</label>
+                <textarea class="fi" id="ped-h-ref" rows="2" placeholder="IBCLC, ENT/surgeon, pediatric dentist, chiropractor, SLP, pediatric PT..."></textarea>
+              </div>
+              <div class="field">
+                <label>Precautions / stage</label>
+                <textarea class="fi" id="ped-h-prec" rows="2" placeholder="Corrected age if premature, post-frenectomy timing, healing stage, active infections, contraindications..."></textarea>
+              </div>
+            </div>
+            <div class="field">
+              <label>Parent goals / concerns</label>
+              <input type="text" class="fi" id="ped-h-goals" placeholder="e.g. pain-free breastfeeding, improved latch, weight gain, reduce colic symptoms..." />
             </div>
           </div>
         </div>
@@ -667,6 +762,146 @@ function openHistory() {
   document.getElementById('intake-controls').style.display = 'block'
 }
 
+// ── CASE TYPE ────────────────────────────────────────────
+let caseType = 'fitness'
+const fitnessSessionTypes = ['Follow-up training','Initial assessment','Corrective exercise','Re-assessment','Nutrition consult','Progress check']
+const pedSessionTypes = ['Oral Myofascial Assessment','TOT Evaluation','Post-Frenectomy Follow-up','Breastfeeding Support Session','Pediatric Soft Tissue','Craniosacral / Myofascial','Re-assessment','Progress Check']
+
+function setCaseType(type) {
+  caseType = type
+  var isFit = type === 'fitness'
+  // Toggle buttons
+  document.getElementById('case-fitness').style.background = isFit ? 'var(--teal)' : 'var(--surf)'
+  document.getElementById('case-fitness').style.color = isFit ? '#fff' : 'var(--txt2)'
+  document.getElementById('case-pediatric').style.background = !isFit ? 'var(--teal)' : 'var(--surf)'
+  document.getElementById('case-pediatric').style.color = !isFit ? '#fff' : 'var(--txt2)'
+  // Show/hide history cards
+  document.getElementById('ns-history-card').style.display = isFit ? 'block' : 'none'
+  document.getElementById('ns-ped-history-card').style.display = !isFit ? 'block' : 'none'
+  // Toggle client fields
+  document.getElementById('fitness-name-field').style.display = isFit ? 'block' : 'none'
+  document.getElementById('pediatric-client-fields').style.display = !isFit ? 'block' : 'none'
+  document.getElementById('client-card-label').textContent = isFit ? 'Client' : 'Infant & Parent'
+  document.getElementById('client-sel-label').textContent = isFit ? 'Select client' : 'Select patient'
+  // Swap session types
+  var sel = document.getElementById('ns-type')
+  var types = isFit ? fitnessSessionTypes : pedSessionTypes
+  sel.innerHTML = types.map(function(t){ return '<option>' + t + '</option>' }).join('')
+}
+
+// ── PED HISTORY COLLAPSIBLE ───────────────────────────────
+var pedHistOpen = false
+function togglePedHistory() {
+  pedHistOpen = !pedHistOpen
+  var body = document.getElementById('ped-hist-body')
+  var arrow = document.getElementById('ped-hist-arrow')
+  var intake = document.getElementById('ped-intake-controls')
+  body.style.maxHeight = pedHistOpen ? body.scrollHeight + 600 + 'px' : '0'
+  arrow.classList.toggle('open', pedHistOpen)
+  intake.style.display = pedHistOpen ? 'block' : 'none'
+}
+function openPedHistory() {
+  pedHistOpen = true
+  var body = document.getElementById('ped-hist-body')
+  body.style.maxHeight = body.scrollHeight + 600 + 'px'
+  document.getElementById('ped-hist-arrow').classList.add('open')
+  document.getElementById('ped-intake-controls').style.display = 'block'
+}
+
+// ── PED INTAKE RECORDING ──────────────────────────────────
+var pedIntakeRecognition = null
+var pedIntakeRecording = false
+var pedIntakeTranscript = ''
+
+function togglePedIntakeRecord() {
+  if (!SpeechRec) { document.getElementById('no-mic').style.display='block'; return }
+  pedIntakeRecording ? stopPedIntakeRecord() : startPedIntakeRecord()
+}
+function startPedIntakeRecord() {
+  pedIntakeRecognition = new SpeechRec()
+  pedIntakeRecognition.continuous = true
+  pedIntakeRecognition.interimResults = true
+  pedIntakeRecognition.lang = 'en-US'
+  pedIntakeTranscript = document.getElementById('ped-intake-transcript').value
+  pedIntakeRecognition.onresult = function(e) {
+    var final = '', interim = ''
+    for (var i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) final += e.results[i][0].transcript + ' '
+      else interim += e.results[i][0].transcript
+    }
+    pedIntakeTranscript += final
+    document.getElementById('ped-intake-transcript').value = pedIntakeTranscript + interim
+    document.getElementById('ped-intake-wrap').style.display = 'block'
+  }
+  pedIntakeRecognition.onerror = function() { stopPedIntakeRecord() }
+  pedIntakeRecognition.onend = function() { if (pedIntakeRecording) pedIntakeRecognition.start() }
+  pedIntakeRecognition.start()
+  pedIntakeRecording = true
+  document.getElementById('ped-intake-rec-btn').classList.add('on')
+  document.getElementById('ped-intake-rec-label').textContent = 'Stop Recording'
+  document.getElementById('ped-intake-hint').textContent = 'Listening... ask the parent about birth, feeding, symptoms. Tap Stop when done.'
+  document.getElementById('ped-intake-wrap').style.display = 'block'
+}
+function stopPedIntakeRecord() {
+  if (pedIntakeRecognition) { pedIntakeRecognition.onend=null; pedIntakeRecognition.stop(); pedIntakeRecognition=null }
+  pedIntakeRecording = false
+  pedIntakeTranscript = document.getElementById('ped-intake-transcript').value
+  document.getElementById('ped-intake-rec-btn').classList.remove('on')
+  document.getElementById('ped-intake-rec-label').textContent = 'Record Intake Conversation'
+  document.getElementById('ped-intake-hint').textContent = 'Tap record again to add more, or tap Extract History Fields below.'
+}
+function clearPedIntake() {
+  if (pedIntakeRecording) stopPedIntakeRecord()
+  document.getElementById('ped-intake-transcript').value = ''
+  document.getElementById('ped-intake-wrap').style.display = 'none'
+  pedIntakeTranscript = ''
+}
+
+async function extractPedHistory() {
+  var transcript = document.getElementById('ped-intake-transcript').value.trim()
+  if (!transcript) { alert('Record an intake conversation first.'); return }
+  var btn = document.getElementById('btn-ped-extract')
+  btn.disabled = true; btn.textContent = 'Extracting...'
+  document.getElementById('ped-extract-loading').style.display = 'block'
+
+  var prompt = 'You are a clinical intake assistant for a massage therapist specializing in infant and pediatric oral myofascial work including tongue ties, lip ties, buccal ties, and breastfeeding support.\n\nBelow is a raw intake conversation between the therapist and a parent. Extract only the clinically relevant information.\n\nTranscript:\n"""\n' + transcript + '\n"""\n\nReturn ONLY a valid JSON object with exactly these keys:\n- "birth": Birth history - gestational age, delivery type (vaginal/C-section), use of forceps or vacuum, NICU stay, jaundice, any interventions at birth\n- "feeding": Feeding history - breast/bottle/mixed, latch quality, feeding duration and frequency, weight gain trajectory, nipple pain or damage for mother, use of nipple shield, reflux or gassiness\n- "oral": Oral visual findings - tongue mobility, elevation and lateralization, lip tie appearance, buccal ties, palate shape, oral symmetry, any clicking or breaking suction\n- "palpation": Palpation findings - tissue tension locations, restriction pattern, tissue quality and health, infant response to touch\n- "referrals": Current or recommended referral network - IBCLC, ENT, pediatric dentist, chiropractor, SLP, PT\n- "precautions": Precautions - corrected age if premature, post-frenectomy stage and timing, active infections, contraindications\n- "goals": Parent goals and concerns - pain-free nursing, improved latch, weight gain, colic relief, etc.\n\nIf a field has no relevant info return empty string. Be concise and clinical from a massage therapy perspective. Return ONLY the JSON, no markdown.'
+
+  try {
+    var res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': S.get(KEY_API), 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 900, messages: [{ role:'user', content: prompt }] })
+    })
+    var data = await res.json()
+    if (data.error) throw new Error(data.error.message)
+    var raw = (data.content||[]).map(function(b){ return b.text||'' }).join('').replace(/```json|```/g,'').trim()
+    var ex = JSON.parse(raw)
+    var fields = [
+      { id:'ped-h-birth',   key:'birth' },
+      { id:'ped-h-feeding', key:'feeding' },
+      { id:'ped-h-oral',    key:'oral' },
+      { id:'ped-h-palp',    key:'palpation' },
+      { id:'ped-h-ref',     key:'referrals' },
+      { id:'ped-h-prec',    key:'precautions' },
+      { id:'ped-h-goals',   key:'goals' }
+    ]
+    fields.forEach(function(f) {
+      var el = document.getElementById(f.id)
+      var existing = el.value.trim()
+      var val = (ex[f.key]||'').trim()
+      if (val) el.value = existing ? existing + '\n' + val : val
+    })
+    var body = document.getElementById('ped-hist-body')
+    body.style.maxHeight = body.scrollHeight + 600 + 'px'
+    showToast('History fields populated!')
+  } catch(err) {
+    alert('Extraction failed. Check your API key in Settings or try again.')
+    console.error(err)
+  }
+  document.getElementById('ped-extract-loading').style.display = 'none'
+  btn.disabled = false; btn.textContent = 'Extract History Fields'
+}
+
 // ── RATING ────────────────────────────────────────────────
 function setRating(v) {
   rating = v
@@ -723,6 +958,8 @@ async function generateSOAP() {
   if (!notes) { alert('Please record or type session notes first.'); return }
   if (isRecording) stopRecording()
 
+  // Build pediatric context if needed
+  if (caseType === 'pediatric') { await generatePedSOAP(); return }
   const clientSel = document.getElementById('ns-client-sel').value
   const newName   = document.getElementById('ns-new-name').value.trim()
   const clientName = clientSel
@@ -818,6 +1055,13 @@ function saveNote() {
   let clients = getClients()
   let clientId = clientSel ? parseInt(clientSel) : null
 
+  // Resolve name for pediatric
+  if (!newName && caseType === 'pediatric') {
+    var inf = document.getElementById('ns-infant-name').value.trim()
+    var par = document.getElementById('ns-parent-name').value.trim()
+    newName = inf ? inf + (par ? ' / ' + par : '') : par || 'Patient'
+  }
+
   // Create new client if needed
   if (!clientId) {
     const newClient = {
@@ -858,6 +1102,7 @@ function saveNote() {
     date:   document.getElementById('ns-date').value,
     type:   document.getElementById('ns-type').value,
     rating,
+    caseType,
     transcript: document.getElementById('ns-transcript').value,
     soap: {
       S: document.getElementById('soap-s').value,
@@ -973,7 +1218,7 @@ function openClientDetail(clientId) {
           <span class="sess-date">${s.date}</span>
           <span class="sess-stars">${stars(s.rating)}</span>
         </div>
-        <div class="sess-type">${s.type}</div>
+        <div class="sess-type">${s.type}${s.caseType==='pediatric' ? ' &nbsp;<span style=\"font-size:11px;background:#E1F5EE;color:#0F6E56;padding:1px 6px;border-radius:4px;font-weight:600\">Peds</span>' : ''}</div>
         <div class="sess-preview">${(s.soap?.S||'').substring(0,100)}</div>
       </div>`).join('')
   }

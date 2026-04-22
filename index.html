@@ -181,9 +181,12 @@ textarea.fi{resize:vertical;line-height:1.55;min-height:78px}
 .divider{height:1px;background:var(--bdr);margin:.75rem 0}
 
 @media(min-width:600px){
-  .scroll-area,.bot-nav,.app-bar{max-width:600px;left:50%;right:auto;transform:translateX(-50%)}
-  .bot-nav,.app-bar{border-left:1px solid var(--bdr);border-right:1px solid var(--bdr)}
+  body{background:#E8E8E6}
+  .app-bar{width:600px;left:50%;right:auto;transform:translateX(-50%);border-left:1px solid var(--bdr);border-right:1px solid var(--bdr)}
+  .bot-nav{width:600px;left:50%;right:auto;transform:translateX(-50%);border-left:1px solid var(--bdr);border-right:1px solid var(--bdr)}
+  .scroll-area{max-width:600px;margin-left:auto;margin-right:auto}
   #toast{bottom:calc(var(--nh) + 24px)}
+  .lock-screen{background:var(--navy)}
 }
 </style>
 </head>

@@ -819,7 +819,7 @@ function togglePedIntakeRecord() {
 }
 function startPedIntakeRecord() {
   pedIntakeRecognition = new SpeechRec()
-  pedIntakeRecognition.continuous = true
+  pedIntakeRecognition.continuous = false
   pedIntakeRecognition.interimResults = true
   pedIntakeRecognition.lang = 'en-US'
   pedIntakeTranscript = document.getElementById('ped-intake-transcript').value
@@ -833,8 +833,12 @@ function startPedIntakeRecord() {
     document.getElementById('ped-intake-transcript').value = pedIntakeTranscript + interim
     document.getElementById('ped-intake-wrap').style.display = 'block'
   }
-  pedIntakeRecognition.onerror = function() { stopPedIntakeRecord() }
-  pedIntakeRecognition.onend = function() { if (pedIntakeRecording) pedIntakeRecognition.start() }
+  pedIntakeRecognition.onerror = function(e) { if (e.error !== 'no-speech' && e.error !== 'aborted') showRecError('Microphone error: ' + e.error) }
+  pedIntakeRecognition.onend = function() {
+    if (pedIntakeRecording) {
+      setTimeout(function() { try { pedIntakeRecognition.start() } catch(e) {} }, 150)
+    }
+  }
   pedIntakeRecognition.start()
   pedIntakeRecording = true
   document.getElementById('ped-intake-rec-btn').classList.add('on')
@@ -869,7 +873,7 @@ async function extractPedHistory() {
   try {
     var res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': S.get(KEY_API), 'anthropic-version': '2023-06-01' },
+      headers: { 'Content-Type': 'application/json', 'x-api-key': S.get(KEY_API), 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
       body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 900, messages: [{ role:'user', content: prompt }] })
     })
     var data = await res.json()
@@ -912,38 +916,100 @@ function setRating(v) {
 
 // ── RECORDING ─────────────────────────────────────────────
 function toggleRecord() {
-  if (!SpeechRec) { document.getElementById('no-mic').style.display='block'; return }
+  if (!SpeechRec) {
+    showRecError('Voice recording is not supported in this browser. On iPhone/iPad use Safari. On desktop use Chrome or Edge.')
+    return
+  }
   isRecording ? stopRecording() : startRecording()
 }
 
 function startRecording() {
-  recognition = new SpeechRec()
-  recognition.continuous = true
+  try {
+    recognition = new SpeechRec()
+  } catch(e) {
+    showRecError('Speech recognition could not start. Try Chrome or Edge on desktop, or check microphone permissions.')
+    return
+  }
+  // iOS Safari does not support continuous=true reliably — use false and restart on end
+  recognition.continuous = false
   recognition.interimResults = true
   recognition.lang = 'en-US'
+  recognition.maxAlternatives = 1
   fullTranscript = document.getElementById('ns-transcript').value
 
-  recognition.onresult = e => {
-    let final='', interim=''
-    for (let i=e.resultIndex;i<e.results.length;i++) {
+  recognition.onstart = function() {
+    document.getElementById('no-mic').style.display = 'none'
+  }
+
+  recognition.onresult = function(e) {
+    var final = '', interim = ''
+    for (var i = e.resultIndex; i < e.results.length; i++) {
       if (e.results[i].isFinal) final += e.results[i][0].transcript + ' '
       else interim += e.results[i][0].transcript
     }
     fullTranscript += final
     document.getElementById('ns-transcript').value = fullTranscript + interim
   }
-  recognition.onerror = () => stopRecording()
-  recognition.onend = () => { if (isRecording) recognition.start() }
-  recognition.start()
+
+  recognition.onerror = function(e) {
+    var msg = {
+      'not-allowed':  'Microphone access was denied. Go to Settings > Safari > Microphone and allow access for this site, then try again.',
+      'no-speech':    '',
+      'audio-capture':'No microphone found. Make sure your microphone is connected.',
+      'network':      'Network error during speech recognition. Check your connection.',
+      'aborted':      ''
+    }[e.error] || ('Speech error: ' + e.error)
+    if (msg) showRecError(msg)
+    if (e.error === 'not-allowed' || e.error === 'audio-capture') {
+      isRecording = false
+      document.getElementById('rec-btn').classList.remove('on')
+      document.getElementById('rec-label').textContent = 'Start Recording'
+    }
+  }
+
+  recognition.onend = function() {
+    // On iOS, recognition stops after each pause — restart automatically if still recording
+    if (isRecording) {
+      try {
+        recognition.start()
+      } catch(e) {
+        // Brief delay before restart to handle iOS timing
+        setTimeout(function() {
+          if (isRecording) {
+            try { recognition.start() } catch(e2) {}
+          }
+        }, 150)
+      }
+    }
+  }
+
+  try {
+    recognition.start()
+  } catch(e) {
+    showRecError('Could not start microphone. Make sure no other app is using it.')
+    return
+  }
+
   isRecording = true
   document.getElementById('rec-btn').classList.add('on')
   document.getElementById('rec-label').textContent = 'Stop Recording'
-  document.getElementById('rec-hint').textContent = 'Recording… speak naturally. Tap Stop when done.'
+  document.getElementById('rec-hint').textContent = 'Listening... speak naturally. Tap Stop when done.'
   document.getElementById('ns-transcript').classList.add('listening')
 }
 
+function showRecError(msg) {
+  var el = document.getElementById('no-mic')
+  el.textContent = msg
+  el.style.display = 'block'
+}
+
 function stopRecording() {
-  if (recognition) { recognition.onend=null; recognition.stop(); recognition=null }
+  if (recognition) {
+    recognition.onend = null
+    recognition.onerror = null
+    try { recognition.stop() } catch(e) {}
+    recognition = null
+  }
   isRecording = false
   fullTranscript = document.getElementById('ns-transcript').value
   document.getElementById('rec-btn').classList.remove('on')
@@ -1024,7 +1090,7 @@ Be concise, professional, clinically precise. Return ONLY the JSON object, no ma
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': S.get(KEY_API), 'anthropic-version': '2023-06-01' },
+      headers: { 'Content-Type': 'application/json', 'x-api-key': S.get(KEY_API), 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
       body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 1200, messages: [{ role:'user', content: prompt }] })
     })
     const data = await res.json()
@@ -1408,7 +1474,7 @@ function toggleIntakeRecord() {
 
 function startIntakeRecord() {
   intakeRecognition = new SpeechRec()
-  intakeRecognition.continuous = true
+  intakeRecognition.continuous = false
   intakeRecognition.interimResults = true
   intakeRecognition.lang = 'en-US'
   intakeTranscript = document.getElementById('intake-transcript').value
@@ -1422,8 +1488,12 @@ function startIntakeRecord() {
     document.getElementById('intake-transcript').value = intakeTranscript + interim
     document.getElementById('intake-transcript-wrap').style.display = 'block'
   }
-  intakeRecognition.onerror = function() { stopIntakeRecord() }
-  intakeRecognition.onend = function() { if (intakeRecording) intakeRecognition.start() }
+  intakeRecognition.onerror = function(e) { if (e.error !== 'no-speech' && e.error !== 'aborted') showRecError('Microphone error: ' + e.error) }
+  intakeRecognition.onend = function() {
+    if (intakeRecording) {
+      setTimeout(function() { try { intakeRecognition.start() } catch(e) {} }, 150)
+    }
+  }
   intakeRecognition.start()
   intakeRecording = true
   document.getElementById('intake-rec-btn').classList.add('on')
@@ -1461,7 +1531,7 @@ async function extractHistory() {
   try {
     var res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': S.get(KEY_API), 'anthropic-version': '2023-06-01' },
+      headers: { 'Content-Type': 'application/json', 'x-api-key': S.get(KEY_API), 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
       body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 800, messages: [{ role:'user', content: prompt }] })
     })
     var data = await res.json()

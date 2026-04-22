@@ -180,6 +180,10 @@ textarea.fi{resize:vertical;line-height:1.55;min-height:78px}
 /* Divider */
 .divider{height:1px;background:var(--bdr);margin:.75rem 0}
 
+.intake-rec-btn{width:100%;padding:13px;border-radius:var(--rs);border:2px solid var(--teal);background:transparent;color:var(--teal);font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all .15s;font-family:inherit;margin-bottom:.5rem}
+.intake-rec-btn.on{background:var(--teal);color:#fff}
+.intake-rec-btn .rec-dot{background:currentColor}
+.intake-hint{font-size:12px;color:var(--txt3);text-align:center;margin-bottom:.75rem;line-height:1.5}
 @media(min-width:600px){
   body{background:#E8E8E6}
   .app-bar{width:600px;left:50%;right:auto;transform:translateX(-50%);border-left:1px solid var(--bdr);border-right:1px solid var(--bdr)}
@@ -278,6 +282,21 @@ textarea.fi{resize:vertical;line-height:1.55;min-height:78px}
         <div class="collaps-hd" onclick="toggleHistory()">
           <div class="card-hd" style="margin:0">Client History</div>
           <span class="collaps-arrow" id="hist-arrow">▼</span>
+        </div>
+        <div id="intake-controls" style="display:none;padding-top:.75rem;border-top:1px solid var(--bdr);margin-top:.75rem">
+          <button class="intake-rec-btn" id="intake-rec-btn" onclick="toggleIntakeRecord()">
+            <div class="rec-dot"></div>
+            <span id="intake-rec-label">Record Intake Conversation</span>
+          </button>
+          <div class="intake-hint" id="intake-hint">Tap record and conduct your intake naturally. Ask questions, let the client respond. Hit Stop, then Extract.</div>
+          <div id="intake-transcript-wrap" style="display:none">
+            <textarea class="trans-area" id="intake-transcript" style="min-height:80px;margin-bottom:.5rem;font-size:13px" placeholder="Intake transcript appears here..." readonly></textarea>
+            <div style="display:flex;gap:8px">
+              <button class="btn-sec" onclick="clearIntake()" style="flex:1;font-size:13px;padding:10px">Clear</button>
+              <button class="btn-pri" id="btn-extract" onclick="extractHistory()" style="flex:2;font-size:13px;padding:10px">Extract History Fields</button>
+            </div>
+          </div>
+          <div class="loading-bar" id="extract-loading"><div class="loading-fill"></div></div>
         </div>
         <div class="collaps-body" id="hist-body" style="max-height:0">
           <div style="padding-top:.75rem">
@@ -635,14 +654,17 @@ function toggleHistory() {
   histOpen = !histOpen
   const body = document.getElementById('hist-body')
   const arrow = document.getElementById('hist-arrow')
-  body.style.maxHeight = histOpen ? body.scrollHeight + 500 + 'px' : '0'
+  const intake = document.getElementById('intake-controls')
+  body.style.maxHeight = histOpen ? body.scrollHeight + 600 + 'px' : '0'
   arrow.classList.toggle('open', histOpen)
+  intake.style.display = histOpen ? 'block' : 'none'
 }
 function openHistory() {
   histOpen = true
   const body = document.getElementById('hist-body')
-  body.style.maxHeight = body.scrollHeight + 500 + 'px'
+  body.style.maxHeight = body.scrollHeight + 600 + 'px'
   document.getElementById('hist-arrow').classList.add('open')
+  document.getElementById('intake-controls').style.display = 'block'
 }
 
 // ── RATING ────────────────────────────────────────────────
@@ -1127,6 +1149,102 @@ function clearAllData() {
   saveClients([]); saveSessions([])
   populateClientSelect(); renderClientList()
   showToast('All data cleared')
+}
+
+// ── INTAKE RECORDING ─────────────────────────────────────
+let intakeRecognition = null
+let intakeRecording = false
+let intakeTranscript = ''
+
+function toggleIntakeRecord() {
+  if (!SpeechRec) { document.getElementById('no-mic').style.display='block'; return }
+  intakeRecording ? stopIntakeRecord() : startIntakeRecord()
+}
+
+function startIntakeRecord() {
+  intakeRecognition = new SpeechRec()
+  intakeRecognition.continuous = true
+  intakeRecognition.interimResults = true
+  intakeRecognition.lang = 'en-US'
+  intakeTranscript = document.getElementById('intake-transcript').value
+  intakeRecognition.onresult = function(e) {
+    var final = '', interim = ''
+    for (var i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) final += e.results[i][0].transcript + ' '
+      else interim += e.results[i][0].transcript
+    }
+    intakeTranscript += final
+    document.getElementById('intake-transcript').value = intakeTranscript + interim
+    document.getElementById('intake-transcript-wrap').style.display = 'block'
+  }
+  intakeRecognition.onerror = function() { stopIntakeRecord() }
+  intakeRecognition.onend = function() { if (intakeRecording) intakeRecognition.start() }
+  intakeRecognition.start()
+  intakeRecording = true
+  document.getElementById('intake-rec-btn').classList.add('on')
+  document.getElementById('intake-rec-label').textContent = 'Stop Recording'
+  document.getElementById('intake-hint').textContent = 'Listening... speak naturally with your client. Tap Stop when done, then Extract.'
+  document.getElementById('intake-transcript-wrap').style.display = 'block'
+}
+
+function stopIntakeRecord() {
+  if (intakeRecognition) { intakeRecognition.onend=null; intakeRecognition.stop(); intakeRecognition=null }
+  intakeRecording = false
+  intakeTranscript = document.getElementById('intake-transcript').value
+  document.getElementById('intake-rec-btn').classList.remove('on')
+  document.getElementById('intake-rec-label').textContent = 'Record Intake Conversation'
+  document.getElementById('intake-hint').textContent = 'Tap record again to add more, or tap Extract History Fields below.'
+}
+
+function clearIntake() {
+  if (intakeRecording) stopIntakeRecord()
+  document.getElementById('intake-transcript').value = ''
+  document.getElementById('intake-transcript-wrap').style.display = 'none'
+  intakeTranscript = ''
+  document.getElementById('intake-hint').textContent = 'Tap record and conduct your intake naturally. Ask questions, let the client respond. Hit Stop, then Extract.'
+}
+
+async function extractHistory() {
+  var transcript = document.getElementById('intake-transcript').value.trim()
+  if (!transcript) { alert('Record an intake conversation first.'); return }
+  var btn = document.getElementById('btn-extract')
+  btn.disabled = true; btn.textContent = 'Extracting...'
+  document.getElementById('extract-loading').style.display = 'block'
+
+  var prompt = 'You are a clinical intake assistant for True Balance Fitness, a corrective exercise studio using Brookbush Institute methodology.\n\nBelow is a raw intake conversation transcript between a trainer and client. Both voices are mixed. Extract only the clinically relevant information.\n\nTranscript:\n"""\n' + transcript + '\n"""\n\nReturn ONLY a valid JSON object with exactly these five string keys:\n- "medical": Medical history, injuries, surgeries, diagnoses, chronic conditions, joint replacements, neurological issues\n- "postural": Postural findings, movement dysfunctions, imbalances, asymmetries (APT, LCS, UCS, scoliosis, leg length, etc.)\n- "corrective": Current corrective focus, Release/Lengthen/Activate/Integrate priorities, patterns to address\n- "precautions": Load restrictions, contraindicated movements, physician restrictions, pain triggers, StretchZone notes\n- "goals": What the client wants to achieve - performance, pain relief, aesthetics, function, event-specific\n\nIf a field has no relevant info, return empty string. Be concise and clinical. Return ONLY the JSON, no markdown.'
+
+  try {
+    var res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': S.get(KEY_API), 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 800, messages: [{ role:'user', content: prompt }] })
+    })
+    var data = await res.json()
+    if (data.error) throw new Error(data.error.message)
+    var raw = (data.content||[]).map(function(b){ return b.text||'' }).join('').replace(/```json|```/g,'').trim()
+    var extracted = JSON.parse(raw)
+    var fields = [
+      { id:'ns-h-med',   key:'medical' },
+      { id:'ns-h-post',  key:'postural' },
+      { id:'ns-h-corr',  key:'corrective' },
+      { id:'ns-h-prec',  key:'precautions' },
+      { id:'ns-h-goals', key:'goals' }
+    ]
+    fields.forEach(function(f) {
+      var el = document.getElementById(f.id)
+      var existing = el.value.trim()
+      var val = (extracted[f.key]||'').trim()
+      if (val) el.value = existing ? existing + '\n' + val : val
+    })
+    var body = document.getElementById('hist-body')
+    body.style.maxHeight = body.scrollHeight + 600 + 'px'
+    showToast('History fields populated!')
+  } catch(err) {
+    alert('Extraction failed. Check your API key in Settings or try again.')
+    console.error(err)
+  }
+  document.getElementById('extract-loading').style.display = 'none'
+  btn.disabled = false; btn.textContent = 'Extract History Fields'
 }
 
 // ── TOAST ─────────────────────────────────────────────────
